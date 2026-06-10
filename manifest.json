@@ -2,13 +2,13 @@
   "name": "WeatherFlow",
   "short_name": "WeatherFlow",
   "description": "Moderní počasí podle vaší polohy – WeatherFlow",
-  "start_url": "./index.html",
+  "start_url": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#3B82F6",
   "theme_color": "#3B82F6",
   "lang": "cs",
-  "scope": "./",
+  "scope": "/",
   "icons": [
     {
       "src": "icons/icon-192.png",
