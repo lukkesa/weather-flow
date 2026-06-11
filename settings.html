@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#3B82F6" id="meta-theme-color" />
+  <meta name="description" content="Nastavení WeatherFlow 2026" />
+  <title>Nastavení | WeatherFlow 2026</title>
+  <link rel="stylesheet" href="style.css?v=20260611b" />
+</head>
+<body class="theme-auto settings-page">
+  <div class="settings-shell">
+    <header class="settings-header">
+      <a class="back-link" href="index.html" aria-label="Zpět na hlavní stránku">
+        <span aria-hidden="true">←</span>
+        <span>Zpět na počasí</span>
+      </a>
+      <div class="settings-title-group">
+        <h1>Nastavení</h1>
+        <p>Přizpůsobte si vzhled aplikace podle sebe.</p>
+      </div>
+    </header>
+
+    <main class="settings-card" role="main">
+      <section class="settings-section" aria-labelledby="theme-heading">
+        <div class="settings-section__header">
+          <h2 id="theme-heading">Vzhled</h2>
+          <p>Vyberte, jaký režim chcete používat.</p>
+        </div>
+
+        <label class="settings-option">
+          <input type="radio" name="theme" value="auto" />
+          <span class="settings-option__content">
+            <strong>Automaticky</strong>
+            <small>Podle nastavení zařízení</small>
+          </span>
+        </label>
+
+        <label class="settings-option">
+          <input type="radio" name="theme" value="light" />
+          <span class="settings-option__content">
+            <strong>Světlý režim</strong>
+            <small>Čistá a světlá verze</small>
+          </span>
+        </label>
+
+        <label class="settings-option">
+          <input type="radio" name="theme" value="dark" />
+          <span class="settings-option__content">
+            <strong>Tmavý režim</strong>
+            <small>Pokročilý tmavý vzhled</small>
+          </span>
+        </label>
+
+        <label class="settings-option">
+          <input type="radio" name="theme" value="time" />
+          <span class="settings-option__content">
+            <strong>Podle času</strong>
+            <small>Vyberte si vlastní interval</small>
+          </span>
+        </label>
+
+        <div class="settings-time-row" id="time-settings" hidden>
+          <label class="settings-time-field">
+            <span>Od</span>
+            <select id="time-start">
+              <option value="0">00:00</option>
+              <option value="1">01:00</option>
+              <option value="2">02:00</option>
+              <option value="3">03:00</option>
+              <option value="4">04:00</option>
+              <option value="5">05:00</option>
+              <option value="6">06:00</option>
+              <option value="7">07:00</option>
+              <option value="8">08:00</option>
+              <option value="9">09:00</option>
+              <option value="10">10:00</option>
+              <option value="11">11:00</option>
+              <option value="12">12:00</option>
+              <option value="13">13:00</option>
+              <option value="14">14:00</option>
+              <option value="15">15:00</option>
+              <option value="16">16:00</option>
+              <option value="17">17:00</option>
+              <option value="18">18:00</option>
+              <option value="19">19:00</option>
+              <option value="20">20:00</option>
+              <option value="21">21:00</option>
+              <option value="22">22:00</option>
+              <option value="23">23:00</option>
+            </select>
+          </label>
+          <label class="settings-time-field">
+            <span>Do</span>
+            <select id="time-end">
+              <option value="0">00:00</option>
+              <option value="1">01:00</option>
+              <option value="2">02:00</option>
+              <option value="3">03:00</option>
+              <option value="4">04:00</option>
+              <option value="5">05:00</option>
+              <option value="6">06:00</option>
+              <option value="7">07:00</option>
+              <option value="8">08:00</option>
+              <option value="9">09:00</option>
+              <option value="10">10:00</option>
+              <option value="11">11:00</option>
+              <option value="12">12:00</option>
+              <option value="13">13:00</option>
+              <option value="14">14:00</option>
+              <option value="15">15:00</option>
+              <option value="16">16:00</option>
+              <option value="17">17:00</option>
+              <option value="18">18:00</option>
+              <option value="19">19:00</option>
+              <option value="20">20:00</option>
+              <option value="21">21:00</option>
+              <option value="22">22:00</option>
+              <option value="23">23:00</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section class="settings-section" aria-labelledby="city-heading">
+        <div class="settings-section__header">
+          <h2 id="city-heading">Města</h2>
+          <p>Přidejte až 4 polohy a přepínejte mezi nimi jako mezi kartami.</p>
+        </div>
+
+        <div class="settings-city-block">
+          <label class="settings-city-field">
+            <span>Město</span>
+            <input id="manual-city" type="text" placeholder="Např. Praha" autocomplete="off" />
+          </label>
+          <ul id="city-suggestions" class="settings-suggestions" hidden></ul>
+          <div class="settings-location-actions">
+            <button id="add-gps-card" class="settings-city-button settings-city-button--secondary" type="button">+ GPS</button>
+          </div>
+          <p class="settings-hint">Kliknutím na kartu ji vyberete. Návrhy se přidají automaticky.</p>
+        </div>
+
+        <div id="saved-locations" class="settings-location-list" aria-live="polite"></div>
+        <p id="city-settings-status" class="settings-status" role="status"></p>
+      </section>
+
+      <section class="settings-section settings-section--info" aria-labelledby="app-info-heading">
+        <div class="settings-section__header">
+          <h2 id="app-info-heading">Aplikace</h2>
+          <p>Informace o verzi a o tomto buildu.</p>
+        </div>
+        <div class="settings-info-card">
+          <div><span class="settings-info-label">Název</span><strong>WeatherFlow</strong></div>
+          <div><span class="settings-info-label">Verze</span><strong>1.1.2</strong></div>
+          <div><span class="settings-info-label">Build</span><strong>2026</strong></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="settings.js?v=20260611b"></script>
+</body>
+</html>
