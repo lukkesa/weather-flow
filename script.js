@@ -23,6 +23,9 @@ const CONFIG = {
     LAST_LOC:   'wf_last_location',
     THEME:      'wf_theme',
     LAST_DATA:  'wf_last_data',
+    SAVED_LOCATIONS: 'wf_saved_locations',
+    SELECTED_LOCATION_ID: 'wf_selected_location_id',
+    MANUAL_LOC: 'wf_manual_city',
   }
 };
 
@@ -170,6 +173,9 @@ const state = {
   searchTimeout: null,
 };
 
+let swipeStartX = 0;
+let swipeCurrentX = 0;
+
 // ============================================================
 //  DOM REFERENCE
 // ============================================================
@@ -185,6 +191,8 @@ const DOM = {
   cityName:      $('city-name'),
   updatedTime:   $('updated-time'),
   mainIcon:      $('main-weather-icon'),
+  weatherScene:  $('weather-scene'),
+  currentCard:   $('current-card'),
   tempMain:      $('temp-main'),
   tempFeels:     $('temp-feels'),
   weatherDesc:   $('weather-desc'),
@@ -199,6 +207,7 @@ const DOM = {
   searchInput:   $('city-search'),
   searchResults: $('search-results'),
   searchClear:   $('search-clear'),
+  locationCards: $('location-cards'),
   themeToggle:   $('theme-toggle'),
   gpsBtn:        $('gps-btn'),
   metaTheme:     $('meta-theme-color'),
@@ -244,6 +253,32 @@ function uvLabel(uv) {
   if (uv <= 7) return 'Vysoký';
   if (uv <= 10) return 'Velmi vysoký';
   return 'Extrémní';
+}
+
+function applyWeatherScene(iconName) {
+  const scene = DOM.weatherScene;
+  if (!scene) return;
+
+  scene.className = 'weather-scene';
+  const sceneClassMap = {
+    clear: 'active-sun',
+    'mostly-clear': 'active-sun',
+    'partly-cloudy': 'active-cloudy',
+    cloudy: 'active-cloudy',
+    fog: 'active-fog',
+    drizzle: 'active-rain',
+    rain: 'active-rain',
+    showers: 'active-rain',
+    snow: 'active-snow',
+    'snow-showers': 'active-snow',
+    thunderstorm: 'active-thunder',
+  };
+
+  const sceneClass = sceneClassMap[iconName] || '';
+  if (sceneClass) scene.classList.add(sceneClass);
+
+  const sky = scene.querySelector('.weather-scene__sky');
+  if (sky) sky.style.background = 'transparent';
 }
 
 // ============================================================
@@ -373,6 +408,7 @@ function renderCurrent(data, cityName) {
   const c = data.current;
   const code = c.weather_code;
   const info = WMO.getInfo(code);
+  applyWeatherScene(info.icon);
 
   // Název + čas
   DOM.cityName.textContent = cityName;
@@ -507,6 +543,170 @@ function loadLastLocation() {
   } catch { return null; }
 }
 
+function loadSavedLocations() {
+  const raw = localStorage.getItem(CONFIG.STORAGE.SAVED_LOCATIONS);
+  if (!raw) {
+    const legacy = localStorage.getItem(CONFIG.STORAGE.MANUAL_LOC);
+    if (!legacy) return [];
+    try {
+      const parsed = JSON.parse(legacy);
+      if (parsed?.name) {
+        const migrated = [{ id: 'city-legacy', type: 'city', name: parsed.name, lat: parsed.lat, lon: parsed.lon }];
+        localStorage.setItem(CONFIG.STORAGE.SAVED_LOCATIONS, JSON.stringify(migrated));
+        localStorage.setItem(CONFIG.STORAGE.SELECTED_LOCATION_ID, migrated[0].id);
+        localStorage.removeItem(CONFIG.STORAGE.MANUAL_LOC);
+        return migrated;
+      }
+    } catch {
+      return [];
+    }
+    return [];
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch { return []; }
+}
+
+function loadSelectedLocation() {
+  const locations = loadSavedLocations();
+  const selectedId = localStorage.getItem(CONFIG.STORAGE.SELECTED_LOCATION_ID);
+  const selected = locations.find(location => location.id === selectedId);
+  if (selected) return selected;
+  return locations[0] || { id: 'gps', type: 'gps', name: 'GPS', country: 'Aktuální poloha' };
+}
+
+function renderLocationCards() {
+  const container = DOM.locationCards;
+  if (!container) return;
+
+  const locations = loadSavedLocations();
+  const selectedId = localStorage.getItem(CONFIG.STORAGE.SELECTED_LOCATION_ID);
+
+  if (!locations.length) {
+    container.innerHTML = '<div class="main-location-empty">Přidejte si polohu v nastavení</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+  locations.forEach(location => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = `main-location-card${location.id === selectedId ? ' is-selected' : ''}`;
+    card.innerHTML = `
+      <strong>${location.type === 'gps' ? 'GPS' : location.name}</strong>
+      <span>${location.type === 'gps' ? 'Aktuální poloha' : (location.country || 'Město')}</span>
+    `;
+
+    card.addEventListener('click', () => {
+      activateLocation(location);
+    });
+
+    container.appendChild(card);
+  });
+}
+
+async function activateLocation(location) {
+  localStorage.setItem(CONFIG.STORAGE.SELECTED_LOCATION_ID, location.id);
+  renderLocationCards();
+
+  if (location.type === 'city') {
+    DOM.splashStatus && (DOM.splashStatus.textContent = `Načítám data pro ${location.name}…`);
+    await loadWeatherForCoords(location.lat, location.lon, location.name);
+    return;
+  }
+
+  try {
+    DOM.splashStatus && (DOM.splashStatus.textContent = 'Zjišťuji vaši polohu…');
+    const { lat, lon } = await getGPSLocation();
+    await loadWeatherForCoords(lat, lon);
+  } catch (gpsErr) {
+    console.warn('GPS card selection failed:', gpsErr);
+    showApp();
+    showError(gpsErr.message || 'Nepodařilo se načíst polohu.');
+  }
+}
+
+async function switchLocation(direction) {
+  const locations = loadSavedLocations();
+  if (!locations.length) return;
+
+  const selectedId = localStorage.getItem(CONFIG.STORAGE.SELECTED_LOCATION_ID);
+  const currentIndex = locations.findIndex(location => location.id === selectedId);
+  const nextIndex = (currentIndex + direction + locations.length) % locations.length;
+  const nextLocation = locations[nextIndex];
+
+  if (nextLocation) {
+    await activateLocation(nextLocation);
+  }
+}
+
+function attachSwipeNavigation() {
+  const card = DOM.currentCard;
+  if (!card) return;
+
+  card.addEventListener('pointerdown', event => {
+    swipeStartX = event.clientX;
+    swipeCurrentX = event.clientX;
+    card.classList.add('is-dragging');
+    card.setPointerCapture?.(event.pointerId);
+  });
+
+  card.addEventListener('pointermove', event => {
+    if (event.pointerType === 'mouse' && event.buttons !== 1) return;
+    swipeCurrentX = event.clientX;
+    const delta = swipeCurrentX - swipeStartX;
+    if (Math.abs(delta) > 6) {
+      card.style.transform = `translateX(${delta}px)`;
+      card.style.transition = 'none';
+    }
+  });
+
+  card.addEventListener('touchstart', event => {
+    if (event.touches.length !== 1) return;
+    swipeStartX = event.touches[0].clientX;
+    swipeCurrentX = event.touches[0].clientX;
+    card.classList.add('is-dragging');
+  }, { passive: true });
+
+  card.addEventListener('touchmove', event => {
+    if (event.touches.length !== 1) return;
+    swipeCurrentX = event.touches[0].clientX;
+    const delta = swipeCurrentX - swipeStartX;
+    if (Math.abs(delta) > 6) {
+      card.style.transform = `translateX(${delta}px)`;
+      card.style.transition = 'none';
+    }
+  }, { passive: true });
+
+  const resetSwipe = () => {
+    card.classList.remove('is-dragging');
+    card.style.transition = 'transform var(--dur-fast) var(--ease)';
+    card.style.transform = '';
+  };
+
+  card.addEventListener('pointerup', async event => {
+    const delta = swipeCurrentX - swipeStartX;
+    resetSwipe();
+    if (Math.abs(delta) > 70) {
+      await switchLocation(delta < 0 ? 1 : -1);
+    }
+    card.releasePointerCapture?.(event.pointerId);
+  });
+
+  card.addEventListener('touchend', async () => {
+    const delta = swipeCurrentX - swipeStartX;
+    resetSwipe();
+    if (Math.abs(delta) > 70) {
+      await switchLocation(delta < 0 ? 1 : -1);
+    }
+  });
+
+  card.addEventListener('touchcancel', resetSwipe);
+  card.addEventListener('pointerleave', resetSwipe);
+  card.addEventListener('pointercancel', resetSwipe);
+}
+
 // ============================================================
 //  HLAVNÍ FETCH + RENDER
 // ============================================================
@@ -548,6 +748,21 @@ async function init() {
   // 1. Načíst theme
   const savedTheme = localStorage.getItem(CONFIG.STORAGE.THEME) || 'auto';
   applyTheme(savedTheme);
+  renderLocationCards();
+  attachSwipeNavigation();
+
+  window.addEventListener('storage', event => {
+    if (event.key === CONFIG.STORAGE.SAVED_LOCATIONS || event.key === CONFIG.STORAGE.SELECTED_LOCATION_ID) {
+      renderLocationCards();
+    }
+  });
+
+  const selectedLocation = loadSelectedLocation();
+  if (selectedLocation?.type === 'city') {
+    DOM.splashStatus.textContent = `Načítám data pro ${selectedLocation.name}…`;
+    await loadWeatherForCoords(selectedLocation.lat, selectedLocation.lon, selectedLocation.name);
+    return;
+  }
 
   // 2. Zkusit cache
   const cached = loadCache();
@@ -602,26 +817,30 @@ async function refreshInBackground(lat, lon, cityName) {
 //  GPS TLAČÍTKO
 // ============================================================
 
-DOM.gpsBtn.addEventListener('click', async () => {
-  DOM.gpsBtn.disabled = true;
-  DOM.gpsBtn.style.opacity = '0.5';
-  try {
-    const { lat, lon } = await getGPSLocation();
-    const cityName = await reverseGeocode(lat, lon);
-    await loadWeatherForCoords(lat, lon, cityName);
-  } catch (err) {
-    showError(err.message);
-  } finally {
-    DOM.gpsBtn.disabled = false;
-    DOM.gpsBtn.style.opacity = '';
-  }
-});
+if (DOM.gpsBtn) {
+  DOM.gpsBtn.addEventListener('click', async () => {
+    DOM.gpsBtn.disabled = true;
+    DOM.gpsBtn.style.opacity = '0.5';
+    try {
+      const { lat, lon } = await getGPSLocation();
+      const cityName = await reverseGeocode(lat, lon);
+      await loadWeatherForCoords(lat, lon, cityName);
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      DOM.gpsBtn.disabled = false;
+      DOM.gpsBtn.style.opacity = '';
+    }
+  });
+}
 
 // ============================================================
 //  THEME TOGGLE
 // ============================================================
 
-DOM.themeToggle.addEventListener('click', toggleTheme);
+if (DOM.themeToggle) {
+  DOM.themeToggle.addEventListener('click', toggleTheme);
+}
 
 // Sleduj systémovou preferenci
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
@@ -692,6 +911,7 @@ function renderSearchResults(results) {
       DOM.searchInput.value = '';
       DOM.searchClear.classList.add('hidden');
       DOM.searchResults.classList.add('hidden');
+      localStorage.setItem(CONFIG.STORAGE.MANUAL_LOC, JSON.stringify({ name: r.name, lat: r.latitude, lon: r.longitude }));
       loadWeatherForCoords(r.latitude, r.longitude, r.name);
     };
     li.addEventListener('click', selectCity);
